@@ -36,7 +36,7 @@ Double-click:
 
 ```
 
-run\_webui\_assistant.bat
+run_webui_assistant.bat
 
 ````
 
