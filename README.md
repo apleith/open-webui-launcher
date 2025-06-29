@@ -105,7 +105,20 @@ Enable these via Open WebUI’s **Tools** panel for research workflows:
 
 ## 📜 License
 
-This project is MIT-licensed. See [LICENSE](LICENSE) for details.
+This project is Apache 2.0-licensed. See [LICENSE](https://www.apache.org/licenses/LICENSE-2.0) for details.
+
+---
+
+## 🙌 Acknowledgments
+
+Built using excellent open-source software:
+
+* 🌐 [Open WebUI](https://github.com/open-webui/open-webui)
+* 🤖 [DeepSeek-R1](https://huggingface.co/deepseek-ai/DeepSeek-V2)
+* 🐋 [Docker](https://www.docker.com)
+* 📦 [Ollama](https://ollama.com)
+* 🐍 [PyInstaller](https://pyinstaller.org)
+* 🛠 [Inno Setup](https://jrsoftware.org/isinfo.php)
 
 ---
 
