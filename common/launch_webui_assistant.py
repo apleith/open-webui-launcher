@@ -1,185 +1,236 @@
-# This file is for common/shared logic
-# Keep this in /common/launch_webui_assistant.py
-
 import subprocess
-import sys
+import logging
 import os
-import shutil
-import webbrowser
-import platform
 import time
-import requests
+import webbrowser
+import shutil
+import re
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
-IS_WINDOWS = platform.system() == "Windows"
-IS_MAC = platform.system() == "Darwin"
-DEFAULT_PORT = 3000
-BASE_DIR = Path(__file__).resolve().parent
-LOG_FILE = BASE_DIR / "assistant.log"
-DONE_FLAG = BASE_DIR / ".splash_done"
+OLLAMA_PORT        = 11434
+HOST_PORT          = 3000
+CONTAINER_PORT     = 8080
+VOLUME_NAME        = "open-webui-data"
+CONTAINER_DATA_DIR = "/app/backend/data"
 
+# ─── logging setup ─────────────────────────────────────────────────────────────
+base    = os.getenv("LOCALAPPDATA") or str(Path.home())
+log_dir = Path(base) / "OpenWebUIAssistant" / "logs"
+log_dir.mkdir(parents=True, exist_ok=True)
+LOG_PATH = log_dir / "assistant.log"
 
-def log(message):
-	print(message)
-	with open(LOG_FILE, "a", encoding="utf-8") as f:
-		f.write(message + "\n")
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+fmt   = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+fh    = RotatingFileHandler(LOG_PATH, maxBytes=5*1024*1024, backupCount=3)
+fh.setFormatter(fmt)
+logger.handlers = [fh]
 
+# suppress Windows console windows
+creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+startupinfo   = None
+if os.name == "nt":
+	startupinfo = subprocess.STARTUPINFO()
+	startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-def run_command(cmd, suppress_output=False):
-	kwargs = {"shell": IS_WINDOWS}
-	if suppress_output:
-		kwargs["stdout"] = subprocess.DEVNULL
-		kwargs["stderr"] = subprocess.DEVNULL
+# strip ANSI escapes
+_ESCAPE_RE = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
+def strip_ansi(line: str) -> str:
+	return _ESCAPE_RE.sub("", line)
+
+# ─── helpers ────────────────────────────────────────────────────────────────────
+def ensure_tool(cmd: str) -> bool:
+	p = shutil.which(cmd)
+	if not p:
+		logger.error(f"{cmd} not found on PATH.")
+		return False
+	logger.debug(f"Found {cmd} at {p}")
+	return True
+
+def ensure_docker() -> bool:
 	try:
-		result = subprocess.run(cmd, **kwargs)
-		if result.returncode != 0:
-			raise subprocess.CalledProcessError(result.returncode, cmd)
-	except Exception as e:
-		log("[X] Command failed: {}".format(' '.join(cmd)))
-		log("    Error: {}".format(e))
-		sys.exit(1)
+		subprocess.run(
+			["docker", "info"],
+			stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+			check=True, creationflags=creationflags, startupinfo=startupinfo
+		)
+		logger.debug("Docker Desktop is running")
+		return True
+	except:
+		logger.warning("Docker not running; trying to start Docker Desktop")
+		exe = r"C:\Program Files\Docker\Docker\Docker Desktop.exe"
+		if os.path.exists(exe):
+			os.startfile(exe)
+			time.sleep(10)
+			return ensure_docker()
+		logger.error(f"Docker Desktop not found at {exe}")
+		return False
 
-
-def check_ollama():
-	log("Checking Ollama...")
-	if shutil.which("ollama") is None:
-		log("[X] Ollama is not installed. Visit https://ollama.com/download")
-		sys.exit(1)
-	log("[OK] Ollama is installed.")
-
-
-def detect_model():
+def detect_gpu_vram() -> float:
 	try:
 		import pynvml
 		pynvml.nvmlInit()
-		handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-		mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-		gpu_mem = mem_info.total / (1024 ** 3)
-	except:
-		gpu_mem = 0
-	if gpu_mem >= 42:
-		return "deepseek-r1:70b"
-	elif gpu_mem >= 19:
-		return "deepseek-r1:32b"
-	elif gpu_mem >= 9:
-		return "deepseek-r1:14b"
-	else:
-		return "deepseek-r1:8b"
-
-
-def pull_model(model_name):
-	log(f"Pulling {model_name} model...")
-	run_command(["ollama", "pull", model_name])
-
-
-def ensure_docker_running():
-	log("Checking Docker status...")
-	if shutil.which("docker") is None:
-		log("[X] Docker is not installed or not in PATH.")
-		sys.exit(1)
-
-	def docker_ready():
+		h = pynvml.nvmlDeviceGetHandleByIndex(0)
+		m = pynvml.nvmlDeviceGetMemoryInfo(h)
+		v = m.total / (1024**3)
+		logger.debug(f"NVML reports {v:.1f} GB VRAM")
+		return v
+	except Exception:
 		try:
-			out = subprocess.check_output(["docker", "system", "info"], stderr=subprocess.STDOUT)
-			return b"Server Version" in out
-		except subprocess.CalledProcessError as e:
-			log("[!] Docker not responding: {}".format(e))
-			return False
+			out = subprocess.check_output(
+				["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+				encoding="utf-8", creationflags=creationflags, startupinfo=startupinfo
+			)
+			v = float(out.splitlines()[0]) / 1024
+			logger.debug(f"nvidia-smi reports {v:.1f} GB VRAM")
+			return v
+		except:
+			logger.debug("No GPU detected, assuming CPU-only")
+			return 0.0
 
-	if docker_ready():
-		log("[OK] Docker is running.")
-		return
-
-	if IS_WINDOWS:
-		docker_path = os.path.expandvars(r"%ProgramFiles%\Docker\Docker\Docker Desktop.exe")
-		if not os.path.exists(docker_path):
-			log("[X] Docker Desktop not found.")
-			sys.exit(1)
-		log("Starting Docker Desktop...")
-		subprocess.Popen([docker_path])
-		for i in range(30):
-			if docker_ready():
-				log("[OK] Docker is now running.")
-				return
-			log(f"  - Retry {i+1}/30: Docker still starting...")
-			time.sleep(3)
-		log("[X] Docker failed to start within 90 seconds.")
-		sys.exit(1)
-	else:
-		log("[!] Please ensure Docker is manually started on macOS/Linux.")
-		sys.exit(1)
-
-
-def get_docker_image():
-	try:
-		import pynvml
-		pynvml.nvmlInit()
-		handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-		name = pynvml.nvmlDeviceGetName(handle).decode()
-		log(f"[OK] GPU Detected: {name}")
-		return "ghcr.io/open-webui/open-webui:cuda"
-	except:
-		log("[!] No compatible GPU found. Falling back to CPU image.")
-		return "ghcr.io/open-webui/open-webui:main"
-
-
-def start_open_webui_docker(docker_image):
-	log("Checking if Open WebUI container is running...")
-	subprocess.run(["docker", "rm", "-f", "open-webui"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-	log("Starting new Open WebUI container...")
-	run_command([
-		"docker", "run", "-d",
-		"--name", "open-webui",
-		"-p", f"{DEFAULT_PORT}:3000",
-		"-v", "ollama:/root/.ollama",
-		"--add-host", "host.docker.internal:host-gateway",
-		"-e", "PORT=3000",
-		"-e", "HOST=0.0.0.0",
-		"-e", "WEBUI_AUTH=False",
-		docker_image
-	])
-	log("[OK] Open WebUI container started.")
-
-
-def open_browser():
-	log("Waiting for WebUI to become available...")
-	for attempt in range(30):
-		try:
-			resp = requests.get(f"http://localhost:{DEFAULT_PORT}/auth", timeout=1)
-			if resp.status_code == 200:
-				log("[OK] WebUI is ready.")
-				webbrowser.open(f"http://localhost:{DEFAULT_PORT}")
-				return True
-		except requests.exceptions.RequestException:
-			pass
-		time.sleep(2)
-	log("[X] WebUI did not become available in time.")
-	return False
-
-
+# ─── main orchestrator ─────────────────────────────────────────────────────────
 def main():
-	LOG_FILE.write_text("Launching Open WebUI Assistant...\n", encoding="utf-8")
-	if DONE_FLAG.exists():
-		DONE_FLAG.unlink()
+	logger.info("Orchestrator starting")
 
-	log("Starting Open WebUI Assistant...")
-	check_ollama()
-	model_name = detect_model()
-	pull_model(model_name)
-	ensure_docker_running()
-	docker_image = get_docker_image()
-	start_open_webui_docker(docker_image)
+	# 1) prereqs
+	if not ensure_tool("docker"):   return
+	if not ensure_tool("ollama"):   return
+	if not ensure_docker():         return
 
-	if open_browser():
-		log("[OK] WebUI opened in browser. Waiting to finalize splash screen...")
-		time.sleep(5)
-		DONE_FLAG.touch()
-		log("[\u2713] All systems ready. Exiting launcher.")
-		os._exit(0)
+	# 2) select model by VRAM
+	gpu = detect_gpu_vram()
+	if   gpu >= 128: tag = "deepseek-r1:671b"
+	elif gpu >=  48: tag = "deepseek-r1:70b"
+	elif gpu >=  24: tag = "deepseek-r1:32b"
+	elif gpu >=  16: tag = "deepseek-r1:14b"
+	elif gpu >=   8: tag = "deepseek-r1:8b"
+	else:            tag = "deepseek-r1:1.5b"
+	logger.info(f"Selected model: {tag}")
+
+	# 3) check installed Ollama models
+	try:
+		out = subprocess.check_output(["ollama","list"], text=True)
+		lines     = [l for l in out.splitlines()[1:] if l.strip()]
+		installed = {l.split()[0] for l in lines}
+	except Exception as e:
+		logger.warning(f"Could not list Ollama models: {e}")
+		installed = set()
+
+	# alias latest for 1.5b
+	alias = None
+	if tag.endswith(":1.5b"):
+		alias = tag.replace(":1.5b", ":latest")
+
+	if tag in installed or (alias and alias in installed):
+		logger.info(f"Model {tag} already installed; skipping pull")
 	else:
-		log("[X] WebUI failed to load.")
-		sys.exit(1)
+		# pull model
+		if tag.endswith(":1.5b"):
+			# background pull + poll until installed
+			logger.info(f"Pulling {tag} via Ollama (in background)...")
+			subprocess.Popen(
+				["ollama","pull", tag],
+				stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+				creationflags=creationflags, startupinfo=startupinfo
+			)
+			for i in range(150):
+				time.sleep(10)
+				try:
+					out = subprocess.check_output(["ollama","list"], text=True)
+					if tag in out or (alias and alias in out):
+						logger.info(f"{tag} now installed.")
+						break
+				except Exception:
+					pass
+				logger.debug(f"Waiting for {tag} installation ({i+1}/150)")
+			else:
+				logger.error(f"Timeout waiting for {tag} to finish downloading")
+				return
+		else:
+			# live progress for larger models
+			logger.info(f"Pulling model {tag} via Ollama")
+			proc = subprocess.Popen(
+				["ollama","pull", tag],
+				stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+				bufsize=0, text=True,
+				creationflags=creationflags, startupinfo=startupinfo
+			)
+			buffer = ""
+			while True:
+				chunk = proc.stdout.read(512)
+				if not chunk:
+					if proc.poll() is not None:
+						break
+					time.sleep(0.1)
+					continue
+				buffer += chunk
+				parts = re.split(r"[\r\n]", buffer)
+				for line in parts[:-1]:
+					clean = strip_ansi(line).strip()
+					if clean:
+						logger.info(clean)
+				buffer = parts[-1]
+			if buffer.strip():
+				logger.info(strip_ansi(buffer).strip())
+			if proc.wait() != 0:
+				logger.error("Ollama pull failed")
+				return
 
+	# 4) start Ollama HTTP server
+	env = os.environ.copy()
+	env["OLLAMA_HOST"] = f"127.0.0.1:{OLLAMA_PORT}"
+	logger.info(f"Starting Ollama server on port {OLLAMA_PORT}")
+	subprocess.Popen(
+		["ollama","serve", tag],
+		env=env, creationflags=creationflags, startupinfo=startupinfo
+	)
+
+	# 5) reuse or create Open WebUI container
+	logger.info("Setting up Open WebUI Docker container")
+	existing = subprocess.run(
+		["docker","ps","-a","--filter","name=open-webui","--format","{{.Names}}"],
+		capture_output=True, text=True
+	).stdout.splitlines()
+
+	image = "ghcr.io/open-webui/open-webui:cuda" if gpu >= 1 else "ghcr.io/open-webui/open-webui:main"
+	if "open-webui" in existing:
+		logger.info("Restarting existing 'open-webui'")
+		subprocess.run(
+			["docker","restart","open-webui"],
+			check=True, creationflags=creationflags, startupinfo=startupinfo
+		)
+	else:
+		logger.info("Creating new 'open-webui'")
+		cmd = [
+			"docker","run","-d","--name","open-webui",
+			"-p", f"{HOST_PORT}:{CONTAINER_PORT}",
+			"--add-host=host.docker.internal:host-gateway",
+			"-e","WEBUI_AUTH=False",
+			"-e",f"OLLAMA_BASE_URL=http://host.docker.internal:{OLLAMA_PORT}",
+			"-v",f"{VOLUME_NAME}:{CONTAINER_DATA_DIR}"
+		]
+		if gpu >= 1:
+			cmd += ["--gpus","all"]
+		cmd.append(image)
+		subprocess.run(cmd, check=True, creationflags=creationflags, startupinfo=startupinfo)
+
+	# 6) poll until WebUI is ready
+	url = f"http://localhost:{HOST_PORT}/"
+	logger.info(f"Waiting for Open WebUI at {url}")
+	for i in range(60):
+		try:
+			import requests
+			r = requests.get(url, timeout=2)
+			if r.status_code == 200 and len(r.text) > 200:
+				logger.info("Open WebUI ready; opening browser")
+				webbrowser.open(url)
+				return
+		except:
+			pass
+		time.sleep(1)
+
+	logger.error("Timed out waiting for Open WebUI")
 
 if __name__ == "__main__":
 	main()

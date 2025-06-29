@@ -1,163 +1,119 @@
-# 🧠 Open WebUI Local Assistant
+# 🚀 Open WebUI Launcher v2.0
 
-A cross-platform launcher for running [Open WebUI](https://github.com/open-webui/open-webui) locally via Docker, auto-loading the best-fit [DeepSeek-R1](https://huggingface.co/deepseek-ai/DeepSeek-V2) model in [Ollama](https://ollama.com/), and providing a responsive splash screen while everything initializes.
-
-Built for researchers, developers, and educators who want a local-first AI assistant with minimal setup and maximum control.
-
----
-
-## 🚀 Features
-
-- ✅ Automatically detects your GPU and selects the right DeepSeek-R1 model
-- 🐳 Starts Open WebUI in a clean Docker container
-- 🔁 Restarts Docker automatically if not running
-- 🌐 Launches your browser only once Open WebUI is confirmed live
-- 🪟 Splash screen shows real-time loading logs and closes on launch
-- 🧼 No leftover containers or port errors—cleans itself
-- 📦 Includes both Windows `.bat` launcher and standalone `.exe` builds
+A desktop launcher for running [Open WebUI](https://github.com/open-webui/open-webui) locally via Docker + Ollama, with automatic model selection and a clean splash screen.
 
 ---
 
 ## ⚙️ Requirements
 
-Install and configure the following:
-
-- [Python 3.12+](https://www.python.org/downloads/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- [Ollama](https://ollama.com/download)
-
-⚠️ Ensure Docker and Ollama are in your system `PATH`.
+- **Docker Desktop** (Windows)  
+- **Ollama CLI** (must be on your `PATH`)  
+- **Internet access** for model downloads  
 
 ---
 
-## 🖥️ Usage
+## 🏁 Getting Started
 
-### 🔹 Windows Standard Launch
+1. **Download the Windows installer**  
+   👉 [Open WebUI Launcher v2.0 for Windows (Installer)](https://github.com/apleith/open-webui-launcher/releases/latest/download/Open_WebUI_Launcher_v2.0.exe)
 
-From the `windows/` folder, double-click:
+2. **Run the installer**  
+   - Double-click `Open_WebUI_Launcher_v2.0.exe` and follow the prompts.
+   - This will install the app to `C:\Program Files\Open WebUI Launcher` by default and create Start Menu and Desktop shortcuts.
 
-```
+3. **Launch the App**  
+   - From your Start Menu or Desktop, click **Open WebUI Launcher**.
+   - A splash screen will appear showing live initialization logs.
+   - Once ready, your default browser will open pointing to `http://localhost:3000/`.
 
-run\_webui\_assistant.bat
+---
 
-```
+## ✨ What It Does
 
-You’ll see a visual splash screen. Once everything is ready, Open WebUI opens automatically.
+- 🔍 **Detects your GPU** and auto-selects the best DeepSeek-R1 model (1.5B–671B).
+- 🐋 **Ensures Docker & Ollama** are running, starting Docker Desktop if needed.
+- 🚀 **Pulls & serves** the selected model via Ollama.
+- 🔄 **Manages** an Open WebUI Docker container with persistent volume.
+- 🌐 **Opens your browser** only when Open WebUI is fully live.
+- 📺 **Displays a splash screen** with real-time logs during startup.
+- 🧹 **Cleans up** leftover containers or port conflicts on each launch.
 
-### 📦 Portable `.exe` Launch
+---
 
-Navigate to `dist/` and run:
+## 🐍 Developer / Portable Mode
 
-```
-
-WebUI\_Assistant\_Portable.exe
-
-````
-
-This version has no terminal window and runs as a self-contained executable.
-
-### 🐍 Python Development Mode
-
-From the terminal in `common/`:
+If you’d rather run from source or use a portable standalone executable:
 
 ```bash
+# Clone the repo
+git clone https://github.com/apleith/open-webui-launcher.git
+cd open-webui-launcher/common
+
+# Python mode:
 python splash_screen.py
 ````
 
+Or copy `dist/Open_WebUI_Launcher_v2.0.exe` to any folder and run it directly—no install required.
+
 ---
 
-## 🧰 Project Structure
+## 📂 Project Layout
 
 ```
-webui-assistant-multiplatform/
-├── common/
-│   ├── splash_screen.py
-│   ├── launch_webui_assistant.py
-│   ├── splash_image.png / .ico
-│   ├── assistant.log
-│   ├── .splash_done
-│   ├── *.spec (PyInstaller configs)
-│   └── config.json (future settings)
-│
-├── windows/
-│   └── run_webui_assistant.bat
-│
+open-webui-launcher/
 ├── dist/
-│   ├── WebUI_Assistant.exe
-│   └── WebUI_Assistant_Portable.exe
+│   └── Open_WebUI_Launcher_v2.0.exe   # Windows installer & portable EXE
 │
-├── standalone/
-│   └── run_webui_assistant_portable.bat
+├── common/                            # Core Python scripts & assets
+│   ├── launch_main.py
+│   ├── launch_webui_assistant.py
+│   ├── splash_screen.py
+│   ├── logo.ico, logo.png
+│   └── splash_image.png
 │
-└── macos/
-    └── run_webui_assistant.command (placeholder)
+├── windows/                           # Windows helper scripts & installer script
+│   ├── launch_hidden.py
+│   ├── run_webui_assistant.bat
+│   └── Open_WebUI_Launcher.iss
+│
+├── open-webui-launcher.spec           # PyInstaller spec
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-## 🔧 Recommended Tools for Academic Use
+## 🔧 Recommended Plugins
 
-From the [Open WebUI Tools Directory](https://openwebui.com/tools), consider enabling:
+Enable these via Open WebUI’s **Tools** panel for research workflows:
 
-| Tool Name                     | Function                                                   |
-| ----------------------------- | ---------------------------------------------------------- |
-| `web_search`                  | Real-time fact-checking, live search via SearXNG or Google |
-| `ocr_scanned_pdf`             | OCRs scanned documents or print PDFs                       |
-| `youtube_transcript_provider` | Extracts transcripts from lecture videos                   |
-| `arxiv_search_tool`           | Pulls cutting-edge academic content directly from arXiv    |
-| `convert_to_json`             | Converts output into structured JSON for export/use        |
-| `calculator`                  | In-chat calculations/statistics                            |
-| `chat_with_csv`               | Analyze CSVs in chat using pandas backend                  |
-| `wolframalpha`                | Theory-heavy math and logic answers                        |
-| `knowledgebase_tools`         | Document memory/search for research papers                 |
+| Plugin                        | Purpose                       |
+| ----------------------------- | ----------------------------- |
+| `web_search`                  | Live fact checking            |
+| `ocr_scanned_pdf`             | OCR for scanned documents     |
+| `youtube_transcript_provider` | Import lecture transcripts    |
+| `arxiv_search_tool`           | Pull latest papers from arXiv |
+| `convert_to_json`             | Structured JSON export        |
+| `calculator`                  | In-chat math and statistics   |
+| `chat_with_csv`               | Pandas-backed CSV analysis    |
+| `wolframalpha`                | Advanced math and logic       |
+| `knowledgebase_tools`         | Document memory & search      |
 
----
-
-### 🛠 How to Activate These Tools
-
-1. Navigate to **Tools** in Open WebUI and click the ➕ icon
-2. Search for each plugin by name (e.g., "Web Search")
-3. Click **Get** to install it
-4. Then go to **Workspace → Models**, edit your model, and enable the tools
-5. In-chat, click the ➕ icon to add tools for that session
-
-📘 [Official Plugin Guide](https://docs.openwebui.com/features/plugin/tools/)
+🔗 [Plugin setup guide](https://docs.openwebui.com/features/plugin/tools/)
 
 ---
 
-## 🧠 Suggested System Prompt (for academic/research use)
+## 📜 License
 
-Paste this into your **System Prompt** in Open WebUI under `Models → Edit`:
-
-```
-You are a research assistant specializing in communication, media studies, and social science. Help summarize papers, translate methods, suggest research questions, and generate APA-style citations when appropriate. Prioritize academic accuracy, clarity, and source attribution.
-```
-
-✅ Combine this with enabled tools for full research utility.
+This project is MIT-licensed. See [LICENSE](LICENSE) for details.
 
 ---
 
-## ☕ Support My Work
+## ❤️ Support
 
-If this launcher saved you time or improved your workflow, consider donating to my coffee fund:
-
-👉 **[ko-fi.com/apleith](https://ko-fi.com/apleith)**
-
-Your support helps me maintain and improve open-source research tools.
+If you find **Open WebUI Launcher** useful, consider buying me a coffee:
+☕ [ko-fi.com/apleith](https://ko-fi.com/apleith)
 
 ---
 
-## 🛡 License
-
-[MIT License](LICENSE)
-
-Fork it, remix it, improve it.
-
----
-
-## 🧭 Credits
-
-* [Open WebUI](https://github.com/open-webui/open-webui)
-* [DeepSeek-R1](https://huggingface.co/deepseek-ai)
-* [Ollama](https://ollama.com)
-* [PyInstaller](https://pyinstaller.org)
+> Built with ❤️ by Alex P Leith, PhD · Powered by Docker, Ollama & Open WebUI

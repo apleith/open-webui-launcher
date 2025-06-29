@@ -1,89 +1,108 @@
+"""
+Splash Screen UI for Open WebUI Assistant.
+Displays splash_image.png as background, overlays live status,
+and sets the window icon to logo.ico.
+Keeps itself always-on-top until explicitly closed.
+"""
+import sys
 import tkinter as tk
-from tkinter import ttk
-from PIL import Image, ImageTk
-import subprocess
-import threading
-import time
-import os
 from pathlib import Path
-import platform
 
-# Configuration
-BASE_DIR = Path(__file__).resolve().parent
-LOG_FILE = BASE_DIR / "assistant.log"
-IMAGE_PATH = BASE_DIR / "splash_image.png"
-DONE_FLAG = BASE_DIR / ".splash_done"
-LAUNCH_SCRIPT = BASE_DIR / "launch_webui_assistant.py"
-IS_WINDOWS = platform.system() == "Windows"
-IS_MAC = platform.system() == "Darwin"
+class SplashScreen:
+	def __init__(self, log_path):
+		self.root = tk.Tk()
+		self.root.overrideredirect(True)
+		# Keep on top
+		self.root.lift()
+		self.root.attributes('-topmost', True)
 
-# Track mouse dragging for window movement
-def start_move(event):
-	splash.x = event.x
-	splash.y = event.y
+		# Locate resources
+		if getattr(sys, 'frozen', False):
+			base = Path(sys._MEIPASS) / 'common'
+		else:
+			base = Path(__file__).parent
 
-def do_move(event):
-	x = event.x_root - splash.x
-	y = event.y_root - splash.y
-	splash.geometry(f"800x450+{x}+{y}")
+		# set window icon
+		ico_path = base / 'logo.ico'
+		if ico_path.exists():
+			try:
+				# for Windows .ico
+				self.root.iconbitmap(str(ico_path))
+			except Exception:
+				pass
 
-# Launch assistant in background
-def run_launcher():
-	with open(LOG_FILE, "a", encoding="utf-8") as log:
-		process = subprocess.Popen(["python", str(LAUNCH_SCRIPT)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-		for line in process.stdout:
-			log.write(line)
-			log.flush()
-			if "All systems ready" in line:
-				DONE_FLAG.touch()
-				break
+		# background image
+		img_path = base / 'splash_image.png'
+		self.bg_image = tk.PhotoImage(file=str(img_path))
+		w, h = self.bg_image.width(), self.bg_image.height()
 
-# Update status label and check for done flag
-def update_status():
-	try:
-		with open(LOG_FILE, "r", encoding="utf-8") as f:
-			lines = f.readlines()
+		# Center window
+		x = (self.root.winfo_screenwidth() - w) // 2
+		y = (self.root.winfo_screenheight() - h) // 2
+		self.root.geometry(f"{w}x{h}+{x}+{y}")
+
+		# Canvas & background
+		self.canvas = tk.Canvas(self.root, width=w, height=h, highlightthickness=0)
+		self.canvas.pack()
+		self.canvas.create_image(0, 0, anchor='nw', image=self.bg_image)
+
+		# Ensure log exists
+		self.log_path = Path(log_path)
+		self.log_path.parent.mkdir(parents=True, exist_ok=True)
+		self.log_path.touch(exist_ok=True)
+
+		# Overlay status text
+		cream = '#FBF1C7'
+		self.text_id = self.canvas.create_text(
+			w//2, h-40,
+			text="Starting…",
+			fill=cream,
+			font=("Arial", 14, "bold")
+		)
+
+		# Draggable window
+		self._drag = {"x": 0, "y": 0}
+		self.root.bind("<ButtonPress-1>", self.on_press)
+		self.root.bind("<B1-Motion>",	self.on_drag)
+
+		# begin updating status
+		self.update()
+
+	def on_press(self, event):
+		self._drag["x"], self._drag["y"] = event.x, event.y
+
+	def on_drag(self, event):
+		x = self.root.winfo_x() + event.x - self._drag["x"]
+		y = self.root.winfo_y() + event.y - self._drag["y"]
+		self.root.geometry(f"+{x}+{y}")
+
+	def update(self):
+		# re-ensure topmost
+		self.root.lift()
+		self.root.attributes('-topmost', True)
+
+		try:
+			lines = self.log_path.read_text().splitlines()
 			if lines:
-				status_label.config(text=lines[-1].strip())
-	except Exception as e:
-		status_label.config(text=f"[Error reading log: {e}]")
-	if DONE_FLAG.exists():
-		splash.destroy()
-	else:
-		splash.after(1000, update_status)
+				last = lines[-1]
+				if "] " in last:
+					msg = last.split("] ", 1)[1]
+				else:
+					msg = last
+				self.canvas.itemconfig(self.text_id, text=msg)
+		except Exception:
+			pass
 
-# UI Setup
-splash = tk.Tk()
-splash.title("Launching WebUI Assistant")
-splash.geometry("800x450")
-splash.overrideredirect(True)
+		self.root.after(500, self.update)
 
-# Center window
-splash.update_idletasks()
-screen_width = splash.winfo_screenwidth()
-screen_height = splash.winfo_screenheight()
-x = (screen_width // 2) - (800 // 2)
-y = (screen_height // 2) - (450 // 2)
-splash.geometry(f"800x450+{x}+{y}")
+	def close(self):
+		self.root.destroy()
 
-# Image background
-if IMAGE_PATH.exists():
-	bg_img = Image.open(IMAGE_PATH).resize((800, 450))
-	bg_photo = ImageTk.PhotoImage(bg_img)
-	bg_label = tk.Label(splash, image=bg_photo)
-	bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-else:
-	splash.configure(bg="black")
-
-# Draggable window
-splash.bind("<Button-1>", start_move)
-splash.bind("<B1-Motion>", do_move)
-
-# Status bar
-status_label = tk.Label(splash, text="Initializing...", font=("Arial", 12), bg="#1a1d1f", fg="#f2ecdb")
-status_label.pack(side="bottom", pady=10)
-
-# Launch + update loop
-threading.Thread(target=run_launcher, daemon=True).start()
-splash.after(1000, update_status)
-splash.mainloop()
+if __name__ == "__main__":
+	import os
+	log = os.path.join(
+		os.getenv('LOCALAPPDATA', os.getcwd()),
+		'OpenWebUIAssistant','logs','assistant.log'
+	)
+	splash = SplashScreen(log)
+	splash.root.mainloop()

@@ -1,4 +1,3 @@
 @echo off
-cd /d "%~dp0"
-powershell -WindowStyle Hidden -Command "Start-Process python -WindowStyle Hidden '../common/splash_screen.py'"
-exit
+REM Portable launcher stub for WebUI Assistant
+python launch_hidden.py

@@ -1,8 +1,7 @@
 /build/
 /dist/
-*.spec
+/installer_input/
+/windows/installer_input/
+/windows/Output/
+/**/__pycache__/
 *.log
-*.pyc
-__pycache__/
-.splash_done
-*.DS_Store
