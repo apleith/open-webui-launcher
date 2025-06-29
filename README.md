@@ -15,7 +15,7 @@ A desktop launcher for running [Open WebUI](https://github.com/open-webui/open-w
 ## 🏁 Getting Started
 
 1. **Download the Windows installer**  
-   👉 [Open WebUI Launcher v2.0 for Windows (Installer)](https://github.com/apleith/open-webui-launcher/blob/main/releases/latest/download/Open_WebUI_Launcher_v2.0.exe)
+   👉 [Open WebUI Launcher v2.0 for Windows (Installer)](https://github.com/apleith/open-webui-launcher/raw/refs/heads/main/releases/latest/download/Open_WebUI_Launcher_v2.0.exe)
 
 2. **Run the installer**  
    - Double-click `Open_WebUI_Launcher_v2.0.exe` and follow the prompts.
