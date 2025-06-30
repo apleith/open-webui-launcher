@@ -15,7 +15,7 @@ A desktop launcher for running [Open WebUI](https://github.com/open-webui/open-w
 ## 🏁 Getting Started
 
 1. **Download the Windows installer**  
-   👉 [Open WebUI Launcher v2.0 for Windows (Installer)](https://github.com/apleith/open-webui-launcher/raw/refs/heads/main/releases/latest/download/Open_WebUI_Launcher_v2.0.exe)
+   👉 [Open WebUI Launcher v2.0 for Windows (Installer)](https://github.com/apleith/open-webui-launcher/releases/tag/v2.0.0)
 
 2. **Run the installer**  
    - Double-click `Open_WebUI_Launcher_v2.0.exe` and follow the prompts.
@@ -103,9 +103,11 @@ Enable these via Open WebUI’s **Tools** panel for research workflows:
 
 ---
 
-## 📜 License
+## 🛡 License
 
-This project is Apache 2.0-licensed. See [LICENSE](https://www.apache.org/licenses/LICENSE-2.0) for details.
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+
+You are free to use, modify, distribute, and build upon this software—even commercially—under the conditions of attribution and license inclusion. See the [LICENSE](LICENSE) file for full terms.
 
 ---
 
